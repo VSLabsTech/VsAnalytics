@@ -1,16 +1,26 @@
-import type { CreateReportBody } from './reports.ts';
+import type { CreateReportBody } from './reports.js';
 
 export const AUDIT_EVENT_TYPES = [
   'login',
   'logout',
+  'email_confirmed',
+  'user_created',
+  'analysis_field_changed',
+  'analysis_report_printed',
+  'password_reset_requested',
+  'password_reset_completed',
   'compound_saved',
   'compound_deleted',
+  'spectrophotometer_run_ingested',
   'pdf_exported'
 ] as const;
 
 export const AUDIT_RESOURCE_TYPES = [
   'session',
+  'user',
   'compound',
+  'analysis',
+  'spectrophotometer_run',
   'spectrophotometry_report'
 ] as const;
 
@@ -47,3 +57,20 @@ export interface ListAuditLogsFilters {
 }
 
 export type ReportExportAuditBody = CreateReportBody;
+
+export interface AnalysisAuditBody {
+  fieldKey?: string;
+  fieldLabel?: string;
+  previousValue?: string;
+  nextValue?: string;
+  compoundName?: string;
+  casId?: string;
+  action?: 'changed' | 'cleared' | 'filled';
+  workflow?: string;
+  projectId?: string;
+  projectName?: string;
+  methodId?: string;
+  methodName?: string;
+  stepDescription?: string;
+  analysisRunId?: string;
+}

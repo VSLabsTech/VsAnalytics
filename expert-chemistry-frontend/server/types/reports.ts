@@ -1,12 +1,15 @@
 export interface ReportRow {
   id: number;
   report_id: string;
+  project_id: string | null;
+  project_name: string | null;
   owner_user_id: number;
   owner_user_identifier: string;
   owner_full_name: string;
   compound_name: string;
   cas_id: string;
   lambda_max: string;
+  solvent: string;
   source: string;
   epsilon_value: string | number;
   path_length_value: string | number;
@@ -18,9 +21,12 @@ export interface ReportRow {
 
 export interface CreateReportBody {
   reportId?: string;
+  projectId?: string;
+  projectName?: string;
   compoundName?: string;
   casId?: string;
   lambdaMax?: string;
+  solvent?: string;
   source?: string;
   epsilonValue?: number | string | null;
   pathLengthValue?: number | string | null;
@@ -33,12 +39,15 @@ export interface CreateReportBody {
 
 export interface CreateReportInput {
   reportId: string;
+  projectId: string;
+  projectName: string;
   ownerUserId: number;
   ownerUserIdentifier: string;
   ownerFullName: string;
   compoundName: string;
   casId: string;
   lambdaMax: string;
+  solvent: string;
   source: string;
   epsilonValue: number;
   pathLengthValue: number;

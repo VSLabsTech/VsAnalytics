@@ -1,8 +1,9 @@
-export type UserRole = 'admin' | 'user';
+export type UserRole = 'admin' | 'analyst';
 
 export interface AuthUser {
   id: number;
   userId: string;
+  email: string;
   fullName: string;
   createdAt: string;
   role: UserRole;
@@ -10,6 +11,7 @@ export interface AuthUser {
 
 export interface SignupBody {
   userId: string;
+  email: string;
   fullName: string;
   password: string;
 }
@@ -20,6 +22,15 @@ export interface AdminCreateUserBody extends SignupBody {
 
 export interface LoginBody {
   userId: string;
+  password: string;
+}
+
+export interface ForgotPasswordBody {
+  userId: string;
+}
+
+export interface ResetPasswordBody {
+  token: string;
   password: string;
 }
 

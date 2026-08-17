@@ -1,8 +1,11 @@
 export interface ReportPayload {
   reportId: string;
+  projectId?: string;
+  projectName?: string;
   compoundName: string;
   casId: string;
   lambdaMax: string;
+  solvent: string;
   source: string;
   epsilonValue: number;
   pathLengthValue: number;

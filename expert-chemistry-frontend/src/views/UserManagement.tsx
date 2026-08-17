@@ -1,26 +1,162 @@
 import { FormEvent, useEffect, useState } from 'react';
-import { ShieldCheck, UserCog, UserPlus, Users } from 'lucide-react';
+import { Search, ShieldCheck, UserCog, UserPlus, Users } from 'lucide-react';
 import type { AuthUser, UserRole } from '../types/auth';
+import { useLanguage } from '../i18n';
 
 interface UserManagementProps {
   currentUser: AuthUser;
+  globalSearch?: { query: string; nonce: number };
 }
 
 interface CreateUserFormState {
   userId: string;
+  email: string;
   fullName: string;
   password: string;
   role: UserRole;
 }
 
-const INITIAL_CREATE_USER_FORM: CreateUserFormState = {
-  userId: '',
-  fullName: '',
-  password: '',
-  role: 'user'
+const USER_MANAGEMENT_TEXT = {
+  en: {
+    title: 'User Management',
+    adminOnly: 'This area is only available to administrators.',
+    adminControl: 'Admin Control',
+    description: 'Public sign-up is closed after setup. Admins create new users here and control who has elevated access.',
+    registeredUsers: 'Registered Users',
+    admins: 'Admins',
+    searchUsers: 'Search users',
+    searchUsersPlaceholder: 'Search by name, User ID, email or role...',
+    accountProvisioning: 'Account Provisioning',
+    createNewUser: 'Create a new user',
+    userId: 'User ID',
+    email: 'Email',
+    fullName: 'Full Name',
+    password: 'Password',
+    passwordPlaceholder: 'More than 6 characters',
+    role: 'Role',
+    analyst: 'Analyst',
+    admin: 'Admin',
+    fillAll: 'Please fill in all fields.',
+    passwordLength: 'Password must be more than 6 characters long.',
+    createError: 'Unable to create user.',
+    createNowError: 'Unable to create user right now.',
+    created: 'User created successfully.',
+    creating: 'Creating...',
+    createUser: 'Create User',
+    loadError: 'Unable to load users right now.',
+    updateError: 'Unable to update user role.',
+    updateNowError: 'Unable to update user role right now.',
+    accessRegistry: 'Access Registry',
+    rolesPrivileges: 'Roles and privileges',
+    loadingUsers: 'Loading users...',
+    createdLabel: 'Created',
+    privileges: 'Privileges',
+    adminPrivileges: 'Can manage users, compounds, and metrics',
+    analystPrivileges: 'Methods, reports, and audit logs only',
+    updating: 'Updating...',
+    setAnalyst: 'Set As Analyst',
+    promoteAdmin: 'Promote To Admin',
+    currentSession: 'Current Session'
+  },
+  pt: {
+    title: 'Gerenciamento de Usuários',
+    adminOnly: 'Esta área está disponível apenas para administradores.',
+    adminControl: 'Controle Administrativo',
+    description: 'O cadastro público fica fechado após a configuração. Administradores criam novos usuários aqui e controlam quem possui acesso elevado.',
+    registeredUsers: 'Usuários Registrados',
+    admins: 'Administradores',
+    searchUsers: 'Pesquisar usuários',
+    searchUsersPlaceholder: 'Pesquisar por nome, User ID, email ou função...',
+    accountProvisioning: 'Provisionamento de Conta',
+    createNewUser: 'Criar novo usuário',
+    userId: 'ID do Usuário',
+    email: 'Email',
+    fullName: 'Nome Completo',
+    password: 'Senha',
+    passwordPlaceholder: 'Mais de 6 caracteres',
+    role: 'Função',
+    analyst: 'Analista',
+    admin: 'Administrador',
+    fillAll: 'Preencha todos os campos.',
+    passwordLength: 'A senha deve ter mais de 6 caracteres.',
+    createError: 'Não foi possível criar o usuário.',
+    createNowError: 'Não foi possível criar o usuário agora.',
+    created: 'Usuário criado com sucesso.',
+    creating: 'Criando...',
+    createUser: 'Criar Usuário',
+    loadError: 'Não foi possível carregar os usuários agora.',
+    updateError: 'Não foi possível atualizar a função do usuário.',
+    updateNowError: 'Não foi possível atualizar a função do usuário agora.',
+    accessRegistry: 'Registro de Acesso',
+    rolesPrivileges: 'Funções e privilégios',
+    loadingUsers: 'Carregando usuários...',
+    createdLabel: 'Criado em',
+    privileges: 'Privilégios',
+    adminPrivileges: 'Pode gerenciar usuários, compostos e métricas',
+    analystPrivileges: 'Apenas métodos, relatórios e trilhas de auditoria',
+    updating: 'Atualizando...',
+    setAnalyst: 'Definir como Analista',
+    promoteAdmin: 'Promover a Administrador',
+    currentSession: 'Sessão Atual'
+  },
+  es: {
+    title: 'Gestión de Usuarios',
+    adminOnly: 'Esta área está disponible solo para administradores.',
+    adminControl: 'Control Administrativo',
+    description: 'El registro público queda cerrado después de la configuración. Los administradores crean nuevos usuarios aquí y controlan quién tiene acceso elevado.',
+    registeredUsers: 'Usuarios Registrados',
+    admins: 'Administradores',
+    searchUsers: 'Buscar usuarios',
+    searchUsersPlaceholder: 'Buscar por nombre, User ID, email o rol...',
+    accountProvisioning: 'Provisionamiento de Cuenta',
+    createNewUser: 'Crear nuevo usuario',
+    userId: 'ID de Usuario',
+    email: 'Email',
+    fullName: 'Nombre Completo',
+    password: 'Contraseña',
+    passwordPlaceholder: 'Más de 6 caracteres',
+    role: 'Rol',
+    analyst: 'Analista',
+    admin: 'Administrador',
+    fillAll: 'Completa todos los campos.',
+    passwordLength: 'La contraseña debe tener más de 6 caracteres.',
+    createError: 'No se pudo crear el usuario.',
+    createNowError: 'No se puede crear el usuario en este momento.',
+    created: 'Usuario creado correctamente.',
+    creating: 'Creando...',
+    createUser: 'Crear Usuario',
+    loadError: 'No se pueden cargar los usuarios en este momento.',
+    updateError: 'No se pudo actualizar el rol del usuario.',
+    updateNowError: 'No se puede actualizar el rol del usuario en este momento.',
+    accessRegistry: 'Registro de Acceso',
+    rolesPrivileges: 'Roles y privilegios',
+    loadingUsers: 'Cargando usuarios...',
+    createdLabel: 'Creado',
+    privileges: 'Privilegios',
+    adminPrivileges: 'Puede gestionar usuarios, compuestos y métricas',
+    analystPrivileges: 'Solo métodos, informes y registros de auditoría',
+    updating: 'Actualizando...',
+    setAnalyst: 'Definir como Analista',
+    promoteAdmin: 'Promover a Administrador',
+    currentSession: 'Sesión Actual'
+  }
 };
 
-export default function UserManagement({ currentUser }: UserManagementProps) {
+function getApiRole(role: UserRole) {
+  return role === 'analyst' ? 'user' : role;
+}
+
+const INITIAL_CREATE_USER_FORM: CreateUserFormState = {
+  userId: '',
+  email: '',
+  fullName: '',
+  password: '',
+  role: 'analyst'
+};
+
+export default function UserManagement({ currentUser, globalSearch }: UserManagementProps) {
+  const { language } = useLanguage();
+  const text = USER_MANAGEMENT_TEXT[language];
   const [users, setUsers] = useState<AuthUser[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -29,6 +165,12 @@ export default function UserManagement({ currentUser }: UserManagementProps) {
   const [pendingUserId, setPendingUserId] = useState<number | null>(null);
   const [isCreatingUser, setIsCreatingUser] = useState(false);
   const [createUserForm, setCreateUserForm] = useState<CreateUserFormState>(INITIAL_CREATE_USER_FORM);
+  const [userSearch, setUserSearch] = useState('');
+
+  useEffect(() => {
+    if (!globalSearch) return;
+    setUserSearch(globalSearch.query);
+  }, [globalSearch?.nonce]);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -54,7 +196,7 @@ export default function UserManagement({ currentUser }: UserManagementProps) {
           return;
         }
 
-        setError('Unable to load users right now.');
+        setError(text.loadError);
       } finally {
         setIsLoading(false);
       }
@@ -63,7 +205,7 @@ export default function UserManagement({ currentUser }: UserManagementProps) {
     void loadUsers();
 
     return () => controller.abort();
-  }, []);
+  }, [text.loadError]);
 
   const updateRole = async (userId: number, role: UserRole) => {
     setPendingUserId(userId);
@@ -76,13 +218,13 @@ export default function UserManagement({ currentUser }: UserManagementProps) {
         headers: {
           'Content-Type': 'application/json'
         },
-        body: JSON.stringify({ role })
+        body: JSON.stringify({ role: getApiRole(role) })
       });
 
       const payload = await response.json();
 
       if (!response.ok) {
-        setError(payload.error || 'Unable to update user role.');
+        setError(payload.error || text.updateError);
         return;
       }
 
@@ -91,7 +233,7 @@ export default function UserManagement({ currentUser }: UserManagementProps) {
       );
     } catch (requestError) {
       console.error('Failed to update role:', requestError);
-      setError('Unable to update user role right now.');
+      setError(text.updateNowError);
     } finally {
       setPendingUserId(null);
     }
@@ -102,13 +244,13 @@ export default function UserManagement({ currentUser }: UserManagementProps) {
     setCreateUserError(null);
     setCreateUserMessage(null);
 
-    if (!createUserForm.userId.trim() || !createUserForm.fullName.trim() || !createUserForm.password) {
-      setCreateUserError('Please fill in all fields.');
+    if (!createUserForm.userId.trim() || !createUserForm.email.trim() || !createUserForm.fullName.trim() || !createUserForm.password) {
+      setCreateUserError(text.fillAll);
       return;
     }
 
     if (createUserForm.password.length < 7) {
-      setCreateUserError('Password must be more than 6 characters long.');
+      setCreateUserError(text.passwordLength);
       return;
     }
 
@@ -123,25 +265,26 @@ export default function UserManagement({ currentUser }: UserManagementProps) {
         },
         body: JSON.stringify({
           userId: createUserForm.userId.trim(),
+          email: createUserForm.email.trim(),
           fullName: createUserForm.fullName.trim(),
           password: createUserForm.password,
-          role: createUserForm.role
+          role: getApiRole(createUserForm.role)
         })
       });
 
       const payload = await response.json();
 
       if (!response.ok) {
-        setCreateUserError(payload.error || 'Unable to create user.');
+        setCreateUserError(payload.error || text.createError);
         return;
       }
 
       setUsers((currentUsers) => [...currentUsers, payload.user as AuthUser]);
       setCreateUserForm(INITIAL_CREATE_USER_FORM);
-      setCreateUserMessage('User created successfully.');
+      setCreateUserMessage(text.created);
     } catch (requestError) {
       console.error('Failed to create user:', requestError);
-      setCreateUserError('Unable to create user right now.');
+      setCreateUserError(text.createNowError);
     } finally {
       setIsCreatingUser(false);
     }
@@ -150,11 +293,21 @@ export default function UserManagement({ currentUser }: UserManagementProps) {
   if (currentUser.role !== 'admin') {
     return (
       <div className="glass-panel rounded-[2rem] p-6 sm:p-8 border-white/[0.03]">
-        <h1 className="text-3xl sm:text-4xl font-display font-bold text-white tracking-tight">User Management</h1>
-        <p className="mt-4 text-white/60">This area is only available to administrators.</p>
+        <h1 className="text-3xl sm:text-4xl font-display font-bold text-white tracking-tight">{text.title}</h1>
+        <p className="mt-4 text-white/60">{text.adminOnly}</p>
       </div>
     );
   }
+
+  const normalizedUserSearch = userSearch.trim().toLowerCase();
+  const visibleUsers = normalizedUserSearch
+    ? users.filter((user) => [
+        user.fullName,
+        user.userId,
+        user.email,
+        user.role
+      ].some((value) => value.toLowerCase().includes(normalizedUserSearch)))
+    : users;
 
   return (
     <div className="space-y-8 sm:space-y-10">
@@ -162,24 +315,24 @@ export default function UserManagement({ currentUser }: UserManagementProps) {
         <div>
           <div className="flex items-center gap-2 mb-2">
             <span className="text-[10px] font-mono text-primary uppercase tracking-[0.4em] font-bold">
-              Admin Control
+              {text.adminControl}
             </span>
           </div>
           <h1 className="text-3xl sm:text-4xl font-display font-bold text-white tracking-tight">
-            User Management
+            {text.title}
           </h1>
           <p className="text-white/40 mt-1 max-w-3xl text-sm leading-relaxed">
-            Public sign-up is closed after setup. Admins create new users here and control who has elevated access.
+            {text.description}
           </p>
         </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 w-full xl:w-auto">
           <div className="glass-panel rounded-2xl px-5 py-4 border-white/[0.03]">
-            <p className="text-[10px] font-mono uppercase tracking-[0.3em] text-white/30 font-bold">Registered Users</p>
+            <p className="text-[10px] font-mono uppercase tracking-[0.3em] text-white/30 font-bold">{text.registeredUsers}</p>
             <p className="mt-3 text-3xl font-display font-bold text-white">{users.length}</p>
           </div>
           <div className="glass-panel rounded-2xl px-5 py-4 border-white/[0.03]">
-            <p className="text-[10px] font-mono uppercase tracking-[0.3em] text-white/30 font-bold">Admins</p>
+            <p className="text-[10px] font-mono uppercase tracking-[0.3em] text-white/30 font-bold">{text.admins}</p>
             <p className="mt-3 text-3xl font-display font-bold text-white">
               {users.filter((user) => user.role === 'admin').length}
             </p>
@@ -187,65 +340,78 @@ export default function UserManagement({ currentUser }: UserManagementProps) {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 2xl:grid-cols-[0.95fr_1.05fr] gap-6">
-        <section className="glass-panel rounded-[2rem] p-5 sm:p-6 lg:p-8 border-white/[0.03] space-y-6">
-          <div className="flex items-center gap-3">
-            <div className="p-3 rounded-2xl bg-secondary/10 text-secondary border border-secondary/20">
+      <div className="grid grid-cols-1 gap-6">
+        <section className="glass-panel rounded-[2rem] p-4 sm:p-6 lg:p-8 border-white/[0.03] space-y-6 min-w-0">
+          <div className="flex flex-col sm:flex-row sm:items-center gap-3 min-w-0">
+            <div className="p-3 rounded-2xl bg-secondary/10 text-secondary border border-secondary/20 self-start shrink-0">
               <UserPlus size={22} />
             </div>
-            <div>
+            <div className="min-w-0">
               <p className="text-[10px] font-mono uppercase tracking-[0.3em] text-white/30 font-bold">
-                Account Provisioning
+                {text.accountProvisioning}
               </p>
-              <h2 className="text-2xl font-display font-bold text-white mt-1">
-                Create a new user
+              <h2 className="text-xl sm:text-2xl font-display font-bold text-white mt-1 break-words">
+                {text.createNewUser}
               </h2>
             </div>
           </div>
 
           <form onSubmit={handleCreateUser} className="space-y-5">
-            <label className="block space-y-2">
-              <span className="text-[10px] font-mono uppercase tracking-[0.22em] text-white/40 font-bold">User ID</span>
-              <input
-                value={createUserForm.userId}
-                onChange={(event) => setCreateUserForm((current) => ({ ...current, userId: event.target.value }))}
-                className="w-full rounded-xl bg-white/[0.03] border border-white/10 px-4 py-3 text-sm text-white outline-none focus:border-primary/30"
-                placeholder="new_user"
-              />
-            </label>
+            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-5 gap-5 items-end">
+              <label className="block space-y-2 min-w-0">
+                <span className="block text-[10px] font-mono uppercase tracking-[0.16em] sm:tracking-[0.22em] text-white/40 font-bold break-words">{text.userId}</span>
+                <input
+                  value={createUserForm.userId}
+                  onChange={(event) => setCreateUserForm((current) => ({ ...current, userId: event.target.value }))}
+                  className="w-full min-w-0 rounded-xl bg-white/[0.03] border border-white/10 px-4 py-3 text-sm text-white outline-none focus:border-primary/30"
+                  placeholder="new_user"
+                />
+              </label>
 
-            <label className="block space-y-2">
-              <span className="text-[10px] font-mono uppercase tracking-[0.22em] text-white/40 font-bold">Full Name</span>
-              <input
-                value={createUserForm.fullName}
-                onChange={(event) => setCreateUserForm((current) => ({ ...current, fullName: event.target.value }))}
-                className="w-full rounded-xl bg-white/[0.03] border border-white/10 px-4 py-3 text-sm text-white outline-none focus:border-primary/30"
-                placeholder="Dr. Ada Lovelace"
-              />
-            </label>
+              <label className="block space-y-2 min-w-0">
+                <span className="block text-[10px] font-mono uppercase tracking-[0.16em] sm:tracking-[0.22em] text-white/40 font-bold break-words">{text.email}</span>
+                <input
+                  type="email"
+                  value={createUserForm.email}
+                  onChange={(event) => setCreateUserForm((current) => ({ ...current, email: event.target.value }))}
+                  className="w-full min-w-0 rounded-xl bg-white/[0.03] border border-white/10 px-4 py-3 text-sm text-white outline-none focus:border-primary/30"
+                  placeholder="chemist@example.com"
+                />
+              </label>
 
-            <label className="block space-y-2">
-              <span className="text-[10px] font-mono uppercase tracking-[0.22em] text-white/40 font-bold">Password</span>
-              <input
-                type="password"
-                value={createUserForm.password}
-                onChange={(event) => setCreateUserForm((current) => ({ ...current, password: event.target.value }))}
-                className="w-full rounded-xl bg-white/[0.03] border border-white/10 px-4 py-3 text-sm text-white outline-none focus:border-primary/30"
-                placeholder="More than 6 characters"
-              />
-            </label>
+              <label className="block space-y-2 min-w-0">
+                <span className="block text-[10px] font-mono uppercase tracking-[0.16em] sm:tracking-[0.22em] text-white/40 font-bold break-words">{text.fullName}</span>
+                <input
+                  value={createUserForm.fullName}
+                  onChange={(event) => setCreateUserForm((current) => ({ ...current, fullName: event.target.value }))}
+                  className="w-full min-w-0 rounded-xl bg-white/[0.03] border border-white/10 px-4 py-3 text-sm text-white outline-none focus:border-primary/30"
+                  placeholder="Dr. Ada Lovelace"
+                />
+              </label>
 
-            <label className="block space-y-2">
-              <span className="text-[10px] font-mono uppercase tracking-[0.22em] text-white/40 font-bold">Role</span>
-              <select
-                value={createUserForm.role}
-                onChange={(event) => setCreateUserForm((current) => ({ ...current, role: event.target.value as UserRole }))}
-                className="w-full rounded-xl bg-white/[0.03] border border-white/10 px-4 py-3 text-sm text-white outline-none focus:border-primary/30"
-              >
-                <option value="user">User</option>
-                <option value="admin">Admin</option>
-              </select>
-            </label>
+              <label className="block space-y-2 min-w-0">
+                <span className="block text-[10px] font-mono uppercase tracking-[0.16em] sm:tracking-[0.22em] text-white/40 font-bold break-words">{text.password}</span>
+                <input
+                  type="password"
+                  value={createUserForm.password}
+                  onChange={(event) => setCreateUserForm((current) => ({ ...current, password: event.target.value }))}
+                  className="w-full min-w-0 rounded-xl bg-white/[0.03] border border-white/10 px-4 py-3 text-sm text-white outline-none focus:border-primary/30"
+                  placeholder={text.passwordPlaceholder}
+                />
+              </label>
+
+              <label className="block space-y-2 min-w-0">
+                <span className="block text-[10px] font-mono uppercase tracking-[0.16em] sm:tracking-[0.22em] text-white/40 font-bold break-words">{text.role}</span>
+                <select
+                  value={createUserForm.role}
+                  onChange={(event) => setCreateUserForm((current) => ({ ...current, role: event.target.value as UserRole }))}
+                  className="w-full min-w-0 rounded-xl bg-white/[0.03] border border-white/10 px-4 py-3 text-sm text-white outline-none focus:border-primary/30"
+                >
+                  <option value="analyst">{text.analyst}</option>
+                  <option value="admin">{text.admin}</option>
+                </select>
+              </label>
+            </div>
 
             {createUserError && (
               <div className="rounded-2xl border border-red-400/20 bg-red-500/10 p-4 text-sm text-red-100">
@@ -262,10 +428,10 @@ export default function UserManagement({ currentUser }: UserManagementProps) {
             <button
               type="submit"
               disabled={isCreatingUser}
-              className="inline-flex items-center justify-center gap-2 px-5 py-3 rounded-xl bg-secondary text-on-secondary text-[10px] font-mono uppercase tracking-[0.25em] font-bold hover:shadow-[0_0_30px_rgba(118,243,234,0.22)] transition-all disabled:opacity-60 disabled:cursor-not-allowed w-full"
+              className="inline-flex w-full sm:w-auto items-center justify-center gap-2 px-5 py-3 rounded-xl bg-secondary text-on-secondary text-[10px] font-mono uppercase tracking-[0.25em] font-bold hover:shadow-[0_0_30px_rgba(118,243,234,0.22)] transition-all disabled:opacity-60 disabled:cursor-not-allowed"
             >
               <UserPlus size={16} />
-              {isCreatingUser ? 'Creating...' : 'Create User'}
+              {isCreatingUser ? text.creating : text.createUser}
             </button>
           </form>
         </section>
@@ -278,14 +444,28 @@ export default function UserManagement({ currentUser }: UserManagementProps) {
               </div>
               <div>
                 <p className="text-[10px] font-mono uppercase tracking-[0.3em] text-white/30 font-bold">
-                  Access Registry
+                  {text.accessRegistry}
                 </p>
                 <h2 className="text-2xl font-display font-bold text-white mt-1">
-                  Roles and privileges
+                  {text.rolesPrivileges}
                 </h2>
               </div>
             </div>
           </div>
+
+          <label className="block space-y-2">
+            <span className="text-[10px] font-mono uppercase tracking-[0.22em] text-white/40 font-bold">{text.searchUsers}</span>
+            <div className="relative">
+              <Search size={16} className="absolute left-4 top-1/2 -translate-y-1/2 text-white/30" />
+              <input
+                type="search"
+                value={userSearch}
+                onChange={(event) => setUserSearch(event.target.value)}
+                className="w-full rounded-xl bg-white/[0.03] border border-white/10 py-3 pl-11 pr-4 text-sm text-white outline-none focus:border-primary/30 placeholder:text-white/25"
+                placeholder={text.searchUsersPlaceholder}
+              />
+            </div>
+          </label>
 
           {error && (
             <div className="rounded-2xl border border-red-400/20 bg-red-500/10 p-4 text-sm text-red-100">
@@ -295,13 +475,13 @@ export default function UserManagement({ currentUser }: UserManagementProps) {
 
           {isLoading ? (
             <div className="rounded-2xl border border-white/8 bg-white/[0.03] p-6 text-sm text-white/55">
-              Loading users...
+              {text.loadingUsers}
             </div>
           ) : (
             <div className="grid grid-cols-1 xl:grid-cols-2 gap-5">
-              {users.map((user) => {
+              {visibleUsers.map((user) => {
                 const isCurrentUser = user.id === currentUser.id;
-                const nextRole: UserRole = user.role === 'admin' ? 'user' : 'admin';
+                const nextRole: UserRole = user.role === 'admin' ? 'analyst' : 'admin';
                 const canToggle = !(isCurrentUser && user.role === 'admin');
 
                 return (
@@ -315,13 +495,16 @@ export default function UserManagement({ currentUser }: UserManagementProps) {
                         <p className="text-[10px] font-mono uppercase tracking-[0.22em] text-white/30 mt-2">
                           {user.userId}
                         </p>
+                        {user.email && (
+                          <p className="mt-1 text-xs text-white/45 break-all">{user.email}</p>
+                        )}
                       </div>
 
                       <span
                         className={`px-3 py-1 rounded-full border text-[9px] font-mono uppercase tracking-[0.18em] font-bold ${
                           user.role === 'admin'
                             ? 'border-primary/30 bg-primary/10 text-primary'
-                            : 'border-white/10 bg-white/[0.03] text-white/70'
+                            : 'border-secondary/20 bg-secondary/10 text-secondary'
                         }`}
                       >
                         {user.role}
@@ -330,13 +513,13 @@ export default function UserManagement({ currentUser }: UserManagementProps) {
 
                     <div className="mt-5 grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm">
                       <div className="rounded-xl bg-[#0b1121]/50 border border-white/5 p-4">
-                        <p className="text-white/30 font-mono uppercase tracking-widest">Created</p>
+                        <p className="text-white/30 font-mono uppercase tracking-widest">{text.createdLabel}</p>
                         <p className="text-white mt-2 font-semibold">{new Date(user.createdAt).toLocaleString()}</p>
                       </div>
                       <div className="rounded-xl bg-[#0b1121]/50 border border-white/5 p-4">
-                        <p className="text-white/30 font-mono uppercase tracking-widest">Privileges</p>
+                        <p className="text-white/30 font-mono uppercase tracking-widest">{text.privileges}</p>
                         <p className="text-white mt-2 font-semibold">
-                          {user.role === 'admin' ? 'Can manage all users' : 'Standard workflow access'}
+                          {user.role === 'admin' ? text.adminPrivileges : text.analystPrivileges}
                         </p>
                       </div>
                     </div>
@@ -348,13 +531,13 @@ export default function UserManagement({ currentUser }: UserManagementProps) {
                         className="inline-flex items-center justify-center gap-2 px-5 py-3 rounded-xl bg-primary text-on-primary text-[10px] font-mono uppercase tracking-[0.25em] font-bold hover:shadow-[0_0_30px_rgba(167,200,255,0.28)] transition-all disabled:opacity-50 disabled:cursor-not-allowed w-full sm:w-auto"
                       >
                         <UserCog size={16} />
-                        {pendingUserId === user.id ? 'Updating...' : user.role === 'admin' ? 'Set As User' : 'Promote To Admin'}
+                        {pendingUserId === user.id ? text.updating : user.role === 'admin' ? text.setAnalyst : text.promoteAdmin}
                       </button>
 
                       {isCurrentUser && (
                         <div className="inline-flex items-center gap-2 rounded-xl border border-secondary/20 bg-secondary/10 px-4 py-3 text-[10px] font-mono uppercase tracking-[0.2em] text-secondary font-bold">
                           <ShieldCheck size={14} />
-                          Current Session
+                          {text.currentSession}
                         </div>
                       )}
                     </div>

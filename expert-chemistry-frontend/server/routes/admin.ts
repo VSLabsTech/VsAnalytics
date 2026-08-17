@@ -1,13 +1,15 @@
 import { Router } from 'express';
-import { AUDIT_EVENT_TYPES, AUDIT_RESOURCE_TYPES, type AuditLogEventType, type AuditLogResourceType } from '../types/audit.ts';
-import { createUser, isDuplicateUserIdError, listUsers, updateUserRole } from '../services/auth.ts';
-import { listAuditLogs } from '../services/audit.ts';
-import type { AdminCreateUserBody, UserRoleUpdateBody } from '../types/auth.ts';
-import { validateAdminCreateUser, validateRoleUpdate } from '../validators/auth.ts';
+import { AUDIT_EVENT_TYPES, AUDIT_RESOURCE_TYPES, type AuditLogEventType, type AuditLogResourceType } from '../types/audit.js';
+import { createAuditLog } from '../services/audit.js';
+import { createUser, isDuplicateEmailError, isDuplicateUserIdError, listUsers, updateUserRole } from '../services/auth.js';
+import { listAuditLogs } from '../services/audit.js';
+import { requireAdmin, requireAdminOrAnalyst } from '../middleware/auth.js';
+import type { AdminCreateUserBody, UserRoleUpdateBody } from '../types/auth.js';
+import { validateAdminCreateUser, validateRoleUpdate } from '../validators/auth.js';
 
 const router = Router();
 
-router.get('/audit-logs', async (request, response) => {
+router.get('/audit-logs', requireAdminOrAnalyst, async (request, response) => {
   const eventType = typeof request.query.eventType === 'string' ? request.query.eventType : undefined;
   const resourceType = typeof request.query.resourceType === 'string' ? request.query.resourceType : undefined;
   const userSearch = typeof request.query.userSearch === 'string' ? request.query.userSearch : '';
@@ -43,7 +45,7 @@ router.get('/audit-logs', async (request, response) => {
   }
 });
 
-router.get('/users', async (_request, response) => {
+router.get('/users', requireAdmin, async (_request, response) => {
   try {
     const users = await listUsers();
     response.json({ users });
@@ -53,7 +55,7 @@ router.get('/users', async (_request, response) => {
   }
 });
 
-router.post('/users', async (request, response) => {
+router.post('/users', requireAdmin, async (request, response) => {
   const validation = validateAdminCreateUser((request.body ?? {}) as AdminCreateUserBody);
 
   if (validation.error) {
@@ -64,10 +66,30 @@ router.post('/users', async (request, response) => {
   try {
     const user = await createUser(
       validation.data!.userId,
+      validation.data!.email,
       validation.data!.fullName,
       validation.data!.password,
       validation.data!.role
     );
+
+    const currentUser = response.locals.currentUser;
+
+    if (currentUser) {
+      await createAuditLog({
+        actorUserId: currentUser.id,
+        actorUserIdentifier: currentUser.userId,
+        actorFullName: currentUser.fullName,
+        eventType: 'user_created',
+        resourceType: 'user',
+        resourceKey: user.userId,
+        metadata: {
+          createdUserId: user.userId,
+          createdFullName: user.fullName,
+          role: user.role,
+          source: 'admin_panel'
+        }
+      });
+    }
 
     response.status(201).json({ user });
   } catch (error) {
@@ -76,12 +98,17 @@ router.post('/users', async (request, response) => {
       return;
     }
 
+    if (isDuplicateEmailError(error)) {
+      response.status(409).json({ error: 'A user with this email already exists.' });
+      return;
+    }
+
     console.error('Failed to create user from admin panel:', error);
     response.status(500).json({ error: 'Failed to create user.' });
   }
 });
 
-router.patch('/users/:id/role', async (request, response) => {
+router.patch('/users/:id/role', requireAdmin, async (request, response) => {
   const targetUserId = Number(request.params.id);
   const validation = validateRoleUpdate((request.body ?? {}) as UserRoleUpdateBody);
 

@@ -1,10 +1,6 @@
 import { 
   LayoutDashboard, 
-  Upload, 
   FileText, 
-  Users, 
-  FlaskConical, 
-  Settings as SettingsIcon,
   Beaker,
   Waves,
   ShieldCheck,
@@ -14,13 +10,9 @@ import type { UserRole } from './types/auth';
 
 export type View =
   | 'dashboard'
-  | 'upload'
   | 'reports'
-  | 'clients'
-  | 'equipment'
   | 'methods'
   | 'spectrophotometry'
-  | 'settings'
   | 'login'
   | 'user-management'
   | 'audit-logs';
@@ -33,17 +25,12 @@ export interface NavItem {
 }
 
 export const NAV_ITEMS: NavItem[] = [
-  { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
-  { id: 'spectrophotometry', label: 'Spectrophotometry', icon: Waves },
-  { id: 'upload', label: 'File Upload', icon: Upload },
-  { id: 'reports', label: 'Reports', icon: FileText },
-  { id: 'clients', label: 'Clients', icon: Users },
-  { id: 'equipment', label: 'Equipment', icon: FlaskConical },
-  { id: 'methods', label: 'Methods', icon: Beaker },
+  { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard, roles: ['admin'] },
+  { id: 'spectrophotometry', label: 'Spectrophotometry', icon: Waves, roles: ['admin'] },
+  { id: 'reports', label: 'Reports', icon: FileText, roles: ['admin', 'analyst'] },
+  { id: 'methods', label: 'Methods', icon: Beaker, roles: ['admin', 'analyst'] },
   { id: 'user-management', label: 'User Management', icon: ShieldCheck, roles: ['admin'] },
-  { id: 'audit-logs', label: 'Audit Logs', icon: ScrollText, roles: ['admin'] },
+  { id: 'audit-logs', label: 'Audit Logs', icon: ScrollText, roles: ['admin', 'analyst'] },
 ];
 
-export const OTHER_ITEMS: NavItem[] = [
-  { id: 'settings', label: 'Settings', icon: SettingsIcon },
-];
+export const OTHER_ITEMS: NavItem[] = [];

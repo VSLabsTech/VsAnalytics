@@ -1,9 +1,9 @@
 import { Router } from 'express';
-import { createAuditLog } from '../services/audit.ts';
-import { deleteCompound, findCompoundByCas, listCompounds, saveCompound } from '../services/compounds.ts';
-import type { CompoundUpsertBody } from '../types/chemistry.ts';
-import { getSearchTerm } from '../utils/http.ts';
-import { validateCompoundUpsert } from '../validators/compounds.ts';
+import { createAuditLog } from '../services/audit.js';
+import { deleteCompound, findCompoundByCas, listCompounds, saveCompound } from '../services/compounds.js';
+import type { CompoundUpsertBody } from '../types/chemistry.js';
+import { getSearchTerm } from '../utils/http.js';
+import { validateCompoundUpsert } from '../validators/compounds.js';
 
 const router = Router();
 
@@ -20,6 +20,11 @@ router.get('/', async (request, response) => {
 });
 
 router.post('/', async (request, response) => {
+  if (response.locals.currentUser?.role !== 'admin') {
+    response.status(403).json({ error: 'Admin access required.' });
+    return;
+  }
+
   const validation = validateCompoundUpsert((request.body ?? {}) as CompoundUpsertBody);
 
   if (validation.error) {
@@ -44,6 +49,7 @@ router.post('/', async (request, response) => {
           compoundName: compound.nome,
           epsilon: compound.epsilon_m_cm,
           lambdaMax: compound.lambda_max,
+          solvent: compound.solvent,
           pathLength: compound.path_length_cm,
           concentration: compound.concentration_mol_l,
           absorbance: compound.absorbance,
@@ -60,6 +66,11 @@ router.post('/', async (request, response) => {
 });
 
 router.delete('/:cas', async (request, response) => {
+  if (response.locals.currentUser?.role !== 'admin') {
+    response.status(403).json({ error: 'Admin access required.' });
+    return;
+  }
+
   const cas = request.params.cas?.trim();
 
   if (!cas) {

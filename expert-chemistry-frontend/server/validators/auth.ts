@@ -1,18 +1,36 @@
-import type { AdminCreateUserBody, LoginBody, SignupBody, UserRole, UserRoleUpdateBody } from '../types/auth.ts';
+import type {
+  AdminCreateUserBody,
+  ForgotPasswordBody,
+  LoginBody,
+  ResetPasswordBody,
+  SignupBody,
+  UserRole,
+  UserRoleUpdateBody
+} from '../types/auth.js';
 
 const MIN_PASSWORD_LENGTH = 7;
+const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 function normalizeText(value: unknown) {
   return typeof value === 'string' ? value.trim() : '';
 }
 
+function normalizeEmail(value: unknown) {
+  return normalizeText(value).toLowerCase();
+}
+
 export function validateSignup(body: SignupBody) {
   const userId = normalizeText(body.userId);
+  const email = normalizeEmail(body.email);
   const fullName = normalizeText(body.fullName);
   const password = typeof body.password === 'string' ? body.password : '';
 
-  if (!userId || !fullName || !password) {
+  if (!userId || !email || !fullName || !password) {
     return { error: 'All fields are required.' };
+  }
+
+  if (!EMAIL_PATTERN.test(email)) {
+    return { error: 'A valid email address is required.' };
   }
 
   if (password.length < MIN_PASSWORD_LENGTH) {
@@ -22,6 +40,7 @@ export function validateSignup(body: SignupBody) {
   return {
     data: {
       userId,
+      email,
       fullName,
       password
     }
@@ -44,11 +63,46 @@ export function validateLogin(body: LoginBody) {
   };
 }
 
-export function validateRoleUpdate(body: UserRoleUpdateBody) {
-  const role = typeof body.role === 'string' ? body.role.trim().toLowerCase() : '';
+export function validateForgotPassword(body: ForgotPasswordBody) {
+  const userId = normalizeText(body.userId);
 
-  if (role !== 'admin' && role !== 'user') {
-    return { error: 'Role must be either admin or user.' };
+  if (!userId) {
+    return { error: 'User ID is required.' };
+  }
+
+  return {
+    data: {
+      userId
+    }
+  };
+}
+
+export function validateResetPassword(body: ResetPasswordBody) {
+  const token = normalizeText(body.token);
+  const password = typeof body.password === 'string' ? body.password : '';
+
+  if (!token || !password) {
+    return { error: 'Reset token and new password are required.' };
+  }
+
+  if (password.length < MIN_PASSWORD_LENGTH) {
+    return { error: 'Password must be more than 6 characters long.' };
+  }
+
+  return {
+    data: {
+      token,
+      password
+    }
+  };
+}
+
+export function validateRoleUpdate(body: UserRoleUpdateBody) {
+  const rawRole = typeof body.role === 'string' ? body.role.trim().toLowerCase() : '';
+  const role = rawRole === 'user' ? 'analyst' : rawRole;
+
+  if (role !== 'admin' && role !== 'analyst') {
+    return { error: 'Role must be either admin or analyst.' };
   }
 
   return {
@@ -65,10 +119,11 @@ export function validateAdminCreateUser(body: AdminCreateUserBody) {
     return { error: signupValidation.error as string };
   }
 
-  const role = typeof body.role === 'string' ? body.role.trim().toLowerCase() : 'user';
+  const rawRole = typeof body.role === 'string' ? body.role.trim().toLowerCase() : 'analyst';
+  const role = rawRole === 'user' ? 'analyst' : rawRole;
 
-  if (role !== 'admin' && role !== 'user') {
-    return { error: 'Role must be either admin or user.' };
+  if (role !== 'admin' && role !== 'analyst') {
+    return { error: 'Role must be either admin or analyst.' };
   }
 
   return {

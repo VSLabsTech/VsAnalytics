@@ -1,6 +1,6 @@
 import type { RequestHandler } from 'express';
-import { getSessionTokenFromRequest } from '../utils/http.ts';
-import { getUserForSessionToken } from '../services/auth.ts';
+import { getSessionTokenFromRequest } from '../utils/http.js';
+import { getUserForSessionToken } from '../services/auth.js';
 
 export const requireAuth: RequestHandler = async (request, response, next) => {
   try {
@@ -35,6 +35,20 @@ export const requireAdmin: RequestHandler = async (_request, response, next) => 
 
   if (response.locals.currentUser.role !== 'admin') {
     response.status(403).json({ error: 'Admin access required.' });
+    return;
+  }
+
+  next();
+};
+
+export const requireAdminOrAnalyst: RequestHandler = async (_request, response, next) => {
+  if (!response.locals.currentUser) {
+    response.status(401).json({ error: 'Authentication required.' });
+    return;
+  }
+
+  if (response.locals.currentUser.role !== 'admin' && response.locals.currentUser.role !== 'analyst') {
+    response.status(403).json({ error: 'Authorized role required.' });
     return;
   }
 

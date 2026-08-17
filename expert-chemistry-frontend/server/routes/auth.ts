@@ -1,19 +1,61 @@
-import { Router } from 'express';
-import { createAuditLog } from '../services/audit.ts';
+import { Router, type Request } from 'express';
+import { createAuditLog } from '../services/audit.js';
 import {
+  confirmEmailVerificationCode,
+  createEmailVerificationCodeForUser,
   createSessionForUser,
+  createPasswordResetTokenForUser,
   createUser,
   deleteSessionByToken,
   getUserForSessionToken,
   hasAnyUsers,
+  isDuplicateEmailError,
   isDuplicateUserIdError,
-  loginUser
-} from '../services/auth.ts';
-import type { LoginBody, SignupBody } from '../types/auth.ts';
-import { clearSessionCookie, getSessionTokenFromRequest, setSessionCookie } from '../utils/http.ts';
-import { validateLogin, validateSignup } from '../validators/auth.ts';
+  loginUser,
+  resetPasswordWithToken
+} from '../services/auth.js';
+import { requireAuth } from '../middleware/auth.js';
+import type { ForgotPasswordBody, LoginBody, ResetPasswordBody, SignupBody } from '../types/auth.js';
+import { isEmailDeliveryConfigured, sendMail } from '../utils/email.js';
+import { clearSessionCookie, getSessionTokenFromRequest, setSessionCookie } from '../utils/http.js';
+import { validateForgotPassword, validateLogin, validateResetPassword, validateSignup } from '../validators/auth.js';
 
 const router = Router();
+const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+function normalizeEmail(value: unknown) {
+  return typeof value === 'string' ? value.trim().toLowerCase() : '';
+}
+
+function normalizeCode(value: unknown) {
+  return typeof value === 'string' ? value.trim() : '';
+}
+
+function getPublicAppUrl(request: Request) {
+  const configuredUrl = process.env.APP_PUBLIC_URL?.trim();
+
+  if (configuredUrl) {
+    return configuredUrl.replace(/\/$/, '');
+  }
+
+  const origin = request.get('origin');
+
+  if (origin) {
+    return origin.replace(/\/$/, '');
+  }
+
+  const referer = request.get('referer');
+
+  if (referer) {
+    try {
+      return new URL(referer).origin.replace(/\/$/, '');
+    } catch {
+      // Fall through to the API host when the referer is malformed.
+    }
+  }
+
+  return `${request.protocol}://${request.get('host')}`.replace(/\/$/, '');
+}
 
 router.get('/setup-status', async (_request, response) => {
   try {
@@ -43,16 +85,36 @@ router.post('/signup', async (request, response) => {
 
     const user = await createUser(
       validation.data!.userId,
+      validation.data!.email,
       validation.data!.fullName,
       validation.data!.password
     );
 
     const session = await createSessionForUser(user.id);
     setSessionCookie(response, session.token);
+    await createAuditLog({
+      actorUserId: user.id,
+      actorUserIdentifier: user.userId,
+      actorFullName: user.fullName,
+      eventType: 'user_created',
+      resourceType: 'user',
+      resourceKey: user.userId,
+      metadata: {
+        createdUserId: user.userId,
+        createdFullName: user.fullName,
+        role: user.role,
+        source: 'initial_setup'
+      }
+    });
     response.status(201).json({ user });
   } catch (error) {
     if (isDuplicateUserIdError(error)) {
       response.status(409).json({ error: 'A user with this User ID already exists.' });
+      return;
+    }
+
+    if (isDuplicateEmailError(error)) {
+      response.status(409).json({ error: 'A user with this email already exists.' });
       return;
     }
 
@@ -79,17 +141,159 @@ router.post('/login', async (request, response) => {
 
     const session = await createSessionForUser(user.id);
     setSessionCookie(response, session.token);
-    await createAuditLog({
-      actorUserId: user.id,
-      actorUserIdentifier: user.userId,
-      actorFullName: user.fullName,
-      eventType: 'login',
-      resourceType: 'session'
-    });
     response.json({ user });
   } catch (error) {
     console.error('Failed to log in user:', error);
     response.status(500).json({ error: 'Failed to log in user.' });
+  }
+});
+
+router.post('/forgot-password', async (request, response) => {
+  const validation = validateForgotPassword((request.body ?? {}) as ForgotPasswordBody);
+
+  if (validation.error) {
+    response.status(400).json({ error: validation.error });
+    return;
+  }
+
+  try {
+    const resetRequest = await createPasswordResetTokenForUser(validation.data!.userId);
+
+    if (resetRequest?.user.email) {
+      const resetUrl = `${getPublicAppUrl(request)}/#/reset-password?token=${encodeURIComponent(resetRequest.token)}`;
+
+      if (isEmailDeliveryConfigured()) {
+        await sendMail({
+          to: resetRequest.user.email,
+          subject: 'VS Analytics password reset confirmation',
+          text: [
+            `Hello ${resetRequest.user.fullName},`,
+            '',
+            'We received a request to reset your VS Analytics password.',
+            'Confirm this request by opening the secure link below:',
+            '',
+            resetUrl,
+            '',
+            `This link expires at ${resetRequest.expiresAt}.`,
+            'If you did not request this reset, you can ignore this email.'
+          ].join('\n')
+        });
+      } else {
+        console.info(`[dev email] Password reset link for ${resetRequest.user.email}: ${resetUrl}`);
+      }
+    }
+
+    response.json({
+      message: 'If this User ID exists and has an email address, a confirmation link has been sent.'
+    });
+  } catch (error) {
+    console.error('Failed to request password reset:', error);
+    response.status(500).json({ error: 'Failed to request password reset.' });
+  }
+});
+
+router.post('/reset-password', async (request, response) => {
+  const validation = validateResetPassword((request.body ?? {}) as ResetPasswordBody);
+
+  if (validation.error) {
+    response.status(400).json({ error: validation.error });
+    return;
+  }
+
+  try {
+    const user = await resetPasswordWithToken(validation.data!.token, validation.data!.password);
+
+    if (!user) {
+      response.status(400).json({ error: 'Invalid or expired password reset token.' });
+      return;
+    }
+
+    response.json({ message: 'Password reset successfully.' });
+  } catch (error) {
+    console.error('Failed to reset password:', error);
+    response.status(500).json({ error: 'Failed to reset password.' });
+  }
+});
+
+router.post('/email-verification/request', requireAuth, async (request, response) => {
+  const email = normalizeEmail((request.body ?? {}).email);
+
+  if (!email || !EMAIL_PATTERN.test(email)) {
+    response.status(400).json({ error: 'A valid email address is required.' });
+    return;
+  }
+
+  try {
+    const currentUser = response.locals.currentUser;
+    const verification = await createEmailVerificationCodeForUser(currentUser.id, email);
+
+    if (!verification) {
+      response.status(404).json({ error: 'User not found.' });
+      return;
+    }
+
+    if (isEmailDeliveryConfigured()) {
+      await sendMail({
+        to: verification.email,
+        subject: 'VS Analytics email confirmation code',
+        text: [
+          `Hello ${verification.user.fullName},`,
+          '',
+          'Use the code below to confirm your email address in VS Analytics:',
+          '',
+          verification.code,
+          '',
+          `This code expires at ${verification.expiresAt}.`,
+          'If you did not request this, ignore this email.'
+        ].join('\n')
+      });
+    } else {
+      console.info(`[dev email] Email verification code for ${verification.email}: ${verification.code}`);
+    }
+
+    response.json({
+      message: 'Verification code sent.',
+      email: verification.email,
+      expiresAt: verification.expiresAt
+    });
+  } catch (error) {
+    if (isDuplicateEmailError(error)) {
+      response.status(409).json({ error: 'A user with this email already exists.' });
+      return;
+    }
+
+    console.error('Failed to request email verification:', error);
+    response.status(500).json({ error: 'Failed to request email verification.' });
+  }
+});
+
+router.post('/email-verification/confirm', requireAuth, async (request, response) => {
+  const email = normalizeEmail((request.body ?? {}).email);
+  const code = normalizeCode((request.body ?? {}).code);
+
+  if (!email || !EMAIL_PATTERN.test(email) || !code) {
+    response.status(400).json({ error: 'Email and verification code are required.' });
+    return;
+  }
+
+  try {
+    const currentUser = response.locals.currentUser;
+    const user = await confirmEmailVerificationCode(currentUser.id, email, code);
+
+    if (!user) {
+      response.status(400).json({ error: 'Invalid or expired verification code.' });
+      return;
+    }
+
+    response.json({ user });
+  } catch (error) {
+    if (isDuplicateEmailError(error)) {
+      response.status(409).json({ error: 'A user with this email already exists.' });
+      return;
+    }
+
+    console.error('Failed to confirm email verification:', error);
+    response.status(500).json({ error: 'Failed to confirm email verification.' });
   }
 });
 
@@ -122,18 +326,6 @@ router.post('/logout', async (request, response) => {
     const sessionToken = getSessionTokenFromRequest(request);
 
     if (sessionToken) {
-      const user = await getUserForSessionToken(sessionToken);
-
-      if (user) {
-        await createAuditLog({
-          actorUserId: user.id,
-          actorUserIdentifier: user.userId,
-          actorFullName: user.fullName,
-          eventType: 'logout',
-          resourceType: 'session'
-        });
-      }
-
       await deleteSessionByToken(sessionToken);
     }
 
